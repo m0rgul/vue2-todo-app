@@ -1,0 +1,11 @@
+# Node modules (backend & frontend)
+**/node_modules/
+
+# Logs
+**/logs/
+*.log
+npm-debug.log*
+
+# Builds
+front-end/dist/
+back-end/dist/
