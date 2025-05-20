@@ -2,66 +2,70 @@
   <div class="app">
     <h1>Vue 2 Todo App</h1>
 
-    <LoadingOverlay v-if="loading" />
-
     <TodoForm @add="addTodo" />
-    <TodoList v-if="!loading" :todos="todos" @toggle="toggleTodo" @remove="removeTodo" />
+    <TodoList :todos="todos" @toggle="toggleTodo" @remove="removeTodo" />
   </div>
 </template>
 
 <script>
-import axios from 'axios';
+import socket from "./socket";
 
-import LoadingOverlay from './components/LoadingOverlay.vue';
+
 import TodoForm from './components/TodoForm.vue';
 import TodoList from './components/TodoList.vue';
 
 export default {
-  components: { LoadingOverlay, TodoForm, TodoList },
+
+  components: { TodoForm, TodoList },
+
   data() {
     return {
       todos: [],
       loading: false
     };
   },
-  methods: {
-    async fetchTodos() {
-      this.loading = true;
+  mounted() {
+    socket.emit("get-todos");
 
-      try {
-        await new Promise(resolve => setTimeout(resolve, 2000)); // simulate network delay to show off :D
-        const res = await axios.get('http://localhost:8080/api/todos');
-        this.todos = res.data;
-      } catch (err) {
-        console.error('Fetch failed:', err);
-      } finally {
-        this.loading = false;
+    socket.on("todos-list", (data) => {
+      this.todos = data;
+    });
+
+    socket.on("todo-added", (todo) => {
+      this.todos.push(todo);
+    });
+
+    socket.on("todo-updated", (updated) => {
+      const index = this.todos.findIndex((t) => t._id === updated._id);
+      if (index !== -1) this.todos.splice(index, 1, updated);
+    });
+
+    socket.on("todo-deleted", (id) => {
+      this.todos = this.todos.filter((t) => t._id !== id);
+    });
+  },
+  methods: {
+    addTodo(title) {
+      if (title) {
+        socket.emit("add-todo", { title });
+        this.newTodo = "";
       }
     },
-
-    async addTodo(title) {
-      const res = await axios.post('http://localhost:8080/api/todos', { title });
-      this.todos.unshift(res.data);
+    toggleTodo(todo) {
+      socket.emit("update-todo", { id: todo._id, done: todo.done });
     },
-
-    async toggleTodo(todo) {
-      const res = await axios.put(`http://localhost:8080/api/todos/${todo._id}`, {
-        done: !todo.done
-      });
-      const idx = this.todos.findIndex(t => t._id === res.data._id);
-      this.$set(this.todos, idx, res.data);
-    },
-
-    async removeTodo(id) {
-      await axios.delete(`http://localhost:8080/api/todos/${id}`);
-      this.todos = this.todos.filter(t => t._id !== id);
+    removeTodo(id) {
+      socket.emit("delete-todo", id);
     }
-  },
 
-  created() {
-    this.fetchTodos();
+  },
+  beforeDestroy() {
+    socket.off("todos-list");
+    socket.off("todo-added");
+    socket.off("todo-updated");
+    socket.off("todo-deleted");
   }
-};
+}
 </script>
 
 <style scoped>
